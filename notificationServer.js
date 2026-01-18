@@ -19,7 +19,7 @@ const io = new Server(server, {
 const rabbitQueueNames = {
     loggedInEnterExitPlanQueue: 'enterExitWatchListPrice',
     loggedInActiveTradeQueue: 'activeTradePrice',
-    pricePointHitQueue: 'pricePointHit_queue',
+    // pricePointHitQueue: 'pricePointHit_queue',
     removeTempTickerQueue: 'removeTempTicker'
 }
 
@@ -44,18 +44,23 @@ io.on("connection", (socket) =>
 
     socket.on('tradeStream', (data) =>
     {
-        relayTrade(data)
-    })
-
-    socket.on('disconnectedStream', (data) =>
-    {
-        if (stockMonitorConnection) stockMonitorConnection.emit('removeTempTradeStream', { data })
+        data.users.forEach(userId =>
+        {
+            try
+            {
+                let userSocket = loggedInUsers[userId]
+                if (userSocket) { userSocket.emit('singleLiveChart', data.trade) }
+                else { console.log("socket recipient not"); }
+            } catch (error)
+            {
+                console.log(error)
+            }
+        });
     })
 
     socket.on('disconnectTempStream', (data) =>
     {
-        const msg = JSON.stringify(data)
-        rabbitChannel.sendToQueue(rabbitQueueNames.removeTempTickerQueue, Buffer.from(msg), { persistent: true })
+        rabbitChannel.sendToQueue(rabbitQueueNames.removeTempTickerQueue, Buffer.from(JSON.stringify(data)), { persistent: true })
     })
 
     console.log('Connection Established With Notification Server, details pending...')
@@ -71,36 +76,36 @@ async function consumeMessages()
     {
         rabbitConnection = await amqp.connect('amqp://localhost');
         rabbitChannel = await rabbitConnection.createChannel();
-        await rabbitChannel.assertQueue(rabbitQueueNames.pricePointHitQueue, { durable: true });
+        //await rabbitChannel.assertQueue(rabbitQueueNames.pricePointHitQueue, { durable: true });
         await rabbitChannel.assertQueue(rabbitQueueNames.loggedInEnterExitPlanQueue, { durable: true })
         await rabbitChannel.assertQueue(rabbitQueueNames.loggedInActiveTradeQueue, { durable: true })
+        await rabbitChannel.assertQueue(rabbitQueueNames.removeTempTickerQueue, { durable: true })
 
         rabbitChannel.prefetch(1)
 
         console.log('Consumer connected to RabbitMQ. Waiting for message....')
 
-        rabbitChannel.consume(rabbitQueueNames.pricePointHitQueue, (message) =>
-        {
-            if (message !== null)
-            {
-                const content = JSON.parse(message.content.toString());
-                console.log(content)
-                let recipientId = content.userId
-                console.log(`Buffer Hit Message Received for user ${recipientId} as ${content?._id}`)
+        // rabbitChannel.consume(rabbitQueueNames.pricePointHitQueue, (message) =>
+        // {
+        //     if (message !== null)
+        //     {
+        //         const content = JSON.parse(message.content.toString());
+        //         console.log(content)
+        //         let recipientId = content.userId
+        //         console.log(`Buffer Hit Message Received for user ${recipientId} as ${content?._id}`)
 
-                try
-                {
-                    let socket = loggedInUsers['6952bd331482f8927092ddcc']
-                    if (socket) { socket.emit('bufferHit_msg', content) }
-                    else { console.log("socket recipient not"); }
-                } catch (error)
-                {
-                    console.log(error)
-                }
-                rabbitChannel.ack(message);
-            }
-        }, { noAck: false });
-
+        //         try
+        //         {
+        //             let socket = loggedInUsers['6952bd331482f8927092ddcc']
+        //             if (socket) { socket.emit('bufferHit_msg', content) }
+        //             else { console.log("socket recipient not"); }
+        //         } catch (error)
+        //         {
+        //             console.log(error)
+        //         }
+        //         rabbitChannel.ack(message);
+        //     }
+        // }, { noAck: false });
 
         rabbitChannel.consume(rabbitQueueNames.loggedInEnterExitPlanQueue, (message) =>
         {
@@ -138,8 +143,6 @@ async function consumeMessages()
             }
         }, { noAck: false })
 
-
-
     } catch (error)
     {
         console.error("Failed to connect to RabbitMQ or consume messages:", error);
@@ -148,21 +151,6 @@ async function consumeMessages()
 
 }
 
-async function relayTrade(data)
-{
-    data.users.forEach(userId =>
-    {
-        try
-        {
-            let userSocket = loggedInUsers[userId]
-            if (userSocket) { userSocket.emit('singleLiveChart', data.trade) }
-            else { console.log("socket recipient not"); }
-        } catch (error)
-        {
-            console.log(error)
-        }
-    });
-}
 
 
 server.listen(8080, () => { console.log('Notification server connected on port 8080.'); });
