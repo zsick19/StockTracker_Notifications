@@ -19,8 +19,8 @@ const io = new Server(server, {
 const rabbitQueueNames = {
     loggedInEnterExitPlanQueue: 'enterExitWatchListPrice',
     loggedInActiveTradeQueue: 'activeTradePrice',
-    // pricePointHitQueue: 'pricePointHit_queue',
-    removeTempTickerQueue: 'removeTempTicker'
+    removeTempTickerQueue: 'removeTempTicker',
+    loggedInWatchListQueue: 'loggedInWatchListQueue'
 }
 
 let rabbitConnection = undefined
@@ -44,6 +44,7 @@ io.on("connection", (socket) =>
 
     socket.on('tradeStream', (data) =>
     {
+
         data.users.forEach(userId =>
         {
             try
@@ -76,36 +77,20 @@ async function consumeMessages()
     {
         rabbitConnection = await amqp.connect('amqp://localhost');
         rabbitChannel = await rabbitConnection.createChannel();
-        //await rabbitChannel.assertQueue(rabbitQueueNames.pricePointHitQueue, { durable: true });
         await rabbitChannel.assertQueue(rabbitQueueNames.loggedInEnterExitPlanQueue, { durable: true })
         await rabbitChannel.assertQueue(rabbitQueueNames.loggedInActiveTradeQueue, { durable: true })
         await rabbitChannel.assertQueue(rabbitQueueNames.removeTempTickerQueue, { durable: true })
+
+        await rabbitChannel.assertQueue(rabbitQueueNames.loggedInWatchListQueue, { durable: true })
+
+
+
 
         rabbitChannel.prefetch(1)
 
         console.log('Consumer connected to RabbitMQ. Waiting for message....')
 
-        // rabbitChannel.consume(rabbitQueueNames.pricePointHitQueue, (message) =>
-        // {
-        //     if (message !== null)
-        //     {
-        //         const content = JSON.parse(message.content.toString());
-        //         console.log(content)
-        //         let recipientId = content.userId
-        //         console.log(`Buffer Hit Message Received for user ${recipientId} as ${content?._id}`)
 
-        //         try
-        //         {
-        //             let socket = loggedInUsers['6952bd331482f8927092ddcc']
-        //             if (socket) { socket.emit('bufferHit_msg', content) }
-        //             else { console.log("socket recipient not"); }
-        //         } catch (error)
-        //         {
-        //             console.log(error)
-        //         }
-        //         rabbitChannel.ack(message);
-        //     }
-        // }, { noAck: false });
 
         rabbitChannel.consume(rabbitQueueNames.loggedInEnterExitPlanQueue, (message) =>
         {
@@ -116,7 +101,11 @@ async function consumeMessages()
                 try
                 {
                     let socket = loggedInUsers[content.userId]
-                    if (socket) { socket.emit('enterExitWatchListPrice', content) }
+                    if (socket)
+                    {
+                        socket.emit('enterExitWatchListPrice', content)
+                        if (content.includedInUserWatchList) socket.emit('userWatchList', content)
+                    }
                     else { throw new Error("Socket recipient not found"); }
                 } catch (error)
                 {
@@ -133,7 +122,12 @@ async function consumeMessages()
                 try
                 {
                     let socket = loggedInUsers[content.userId]
-                    if (socket) { socket.emit('activeTradePrice', content) }
+                    if (socket)
+                    {
+                        socket.emit('activeTradePrice', content)
+
+                        if (content.includedInUserWatchList) socket.emit('userWatchList', content)
+                    }
                     else { throw new Error("Socket recipient not found"); }
                 } catch (error)
                 {
@@ -142,6 +136,27 @@ async function consumeMessages()
                 rabbitChannel.ack(message);
             }
         }, { noAck: false })
+        rabbitChannel.consume(rabbitQueueNames.loggedInWatchListQueue, (message) =>
+        {
+            if (message !== null)
+            {
+                const content = JSON.parse(message.content.toString())
+                try
+                {
+                    let socket = loggedInUsers[content.userId]
+                    if (socket) { socket.emit('userWatchList', content) }
+                    else { throw new Error("Socket recipient not found"); }
+                } catch (error)
+                {
+                    console.log(error)
+                }
+                rabbitChannel.ack(message);
+            }
+        }, { noAck: false })
+
+
+
+
 
     } catch (error)
     {
