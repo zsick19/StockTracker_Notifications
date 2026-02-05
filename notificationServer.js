@@ -44,7 +44,6 @@ io.on("connection", (socket) =>
 
     socket.on('tradeStream', (data) =>
     {
-
         data.users.forEach(userId =>
         {
             try
@@ -57,6 +56,22 @@ io.on("connection", (socket) =>
                 console.log(error)
             }
         });
+    })
+
+    socket.on('macroWatchListUpdate', (data) =>
+    {
+        data.users.forEach(userId =>
+        {
+            try
+            {
+                let userSocket = loggedInUsers[userId]
+                if (userSocket) { userSocket.emit('macroWatchListUpdate', data.trade) }
+                else { console.log("socket recipient not"); }
+            } catch (error)
+            {
+                console.log(error)
+            }
+        })
     })
 
     socket.on('disconnectTempStream', (data) =>
