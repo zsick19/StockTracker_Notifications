@@ -74,6 +74,23 @@ io.on("connection", (socket) =>
         })
     })
 
+    socket.on('coreSTDHit', (data) =>
+    {
+        data.users.forEach(userId =>
+        {
+            try
+            {
+                let userSocket = loggedInUsers[userId]
+                if (userSocket) { userSocket.emit('coreSTDHit', data.tradeInfo) }
+                else { console.log("socket recipient not"); }
+            } catch (error)
+            {
+                console.log(error)
+            }
+        })
+    })
+
+
     socket.on('disconnectTempStream', (data) =>
     {
         rabbitChannel.sendToQueue(rabbitQueueNames.removeTempTickerQueue, Buffer.from(JSON.stringify(data)), { persistent: true })
