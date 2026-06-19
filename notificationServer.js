@@ -89,6 +89,19 @@ io.on("connection", (socket) =>
             }
         })
     })
+    socket.on('priceAlert', (data) =>
+    {
+        try
+        {
+            let userSocket = loggedInUsers[data.userId]
+            if (userSocket) { userSocket.emit('priceAlert', data) }
+            else { console.log("socket recipient not"); }
+        } catch (error)
+        {
+            console.log(error)
+        }
+
+    })
 
 
     socket.on('disconnectTempStream', (data) =>
