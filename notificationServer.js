@@ -49,7 +49,11 @@ io.on("connection", (socket) =>
             try
             {
                 let userSocket = loggedInUsers[userId]
-                if (userSocket) { userSocket.emit('singleLiveChart', data.trade) }
+                if (userSocket)
+                {
+
+                    userSocket.emit('singleLiveChart', data.trade)
+                }
                 else { console.log("socket recipient not"); }
             } catch (error)
             {
@@ -100,8 +104,26 @@ io.on("connection", (socket) =>
         {
             console.log(error)
         }
-
     })
+
+    socket.on('quoteStream', (data) =>
+    {
+        data.users.forEach(userId =>
+        {
+
+            try
+            {
+                let userSocket = loggedInUsers[userId]
+                if (userSocket) { userSocket.emit('quoteLivePrice', data.quote) }
+                else { console.log('socket recipient not logged in') }
+            } catch (error)
+            {
+                console.log(error)
+            }
+        })
+    })
+
+
 
 
     socket.on('disconnectTempStream', (data) =>
@@ -142,7 +164,6 @@ async function consumeMessages()
             if (message !== null)
             {
                 const content = JSON.parse(message.content.toString())
-
                 try
                 {
                     let socket = loggedInUsers[content.userId]
