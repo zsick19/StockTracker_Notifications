@@ -20,7 +20,8 @@ const rabbitQueueNames = {
     loggedInEnterExitPlanQueue: 'enterExitWatchListPrice',
     loggedInActiveTradeQueue: 'activeTradePrice',
     removeTempTickerQueue: 'removeTempTicker',
-    loggedInWatchListQueue: 'loggedInWatchListQueue'
+    loggedInWatchListQueue: 'loggedInWatchListQueue',
+
 }
 
 let rabbitConnection = undefined
@@ -40,6 +41,32 @@ io.on("connection", (socket) =>
     {
         stockMonitorConnection = socket
         console.log(`Monitor Server Established Connection: ${data.connectionId}`)
+    })
+
+    socket.on('highAlertNewsTicker', (data) =>
+    {
+        // console.log(data)
+        socket.broadcast.emit('highAlertNewsTicker', data)
+    })
+
+    socket.on('newAlertQuoteStream', (data) =>
+    {
+        data.users.forEach(userId =>
+        {
+            try
+            {
+                let userSocket = loggedInUsers[userId]
+                if (userSocket)
+                {
+
+                    userSocket.emit('newsAlertQuoteStream', data.quote)
+                }
+                else { console.log("socket recipient not"); }
+            } catch (error)
+            {
+                console.log(error)
+            }
+        });
     })
 
     socket.on('tradeStream', (data) =>
@@ -123,12 +150,56 @@ io.on("connection", (socket) =>
         })
     })
 
+    socket.on('newsAlertPriceChange', (data) =>
+    {
 
+        data.users.forEach(userId =>
+        {
+            try
+            {
+                let userSocket = loggedInUsers[userId]
+                if (userSocket)
+                {
+
+                    userSocket.emit('newsAlertPriceStream', data.trade)
+                }
+                else { console.log("socket recipient not"); }
+            } catch (error)
+            {
+                console.log(error)
+            }
+        });
+    })
 
 
     socket.on('disconnectTempStream', (data) =>
     {
         rabbitChannel.sendToQueue(rabbitQueueNames.removeTempTickerQueue, Buffer.from(JSON.stringify(data)), { persistent: true })
+    })
+
+    socket.on('disconnect', (reason) =>
+    {
+        if (socket === stockMonitorConnection)
+        {
+            console.log(`Monitor no longer connected to backend  `)
+            try
+            {
+                // Object.fromEntries(
+                Object.entries(loggedInUsers).map(([key, value]) =>
+                {
+                    console.log(key)
+                    value.emit('monitorError', { errorEvent: 'Monitor Error' })
+
+                }
+                )
+                // );
+
+
+            } catch (error)
+            {
+                console.log(error)
+            }
+        }
     })
 
     console.log('Connection Established With Notification Server, details pending...')
